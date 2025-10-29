@@ -1,125 +1,81 @@
-import json
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
-from django.utils.decorators import method_decorator
-from .models import Post, Comment, User
-from django.contrib.auth import authenticate,login,logout
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from django.contrib.auth.models import User
+from django.contrib.auth import authenticate, login, logout
+from .models import Post, Comment, ImageUpload
+from .serializers import PostSerializer, CommentSerializer, ImageUploadSerializer
 from .gemini_api import get_gemini_response
-from .forms import ImageUploadForm
-from django.shortcuts import render, redirect
-
-@csrf_exempt
-def chat(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            val = data.get("message", "not provided")
-            response = get_gemini_response("You are a chat bot and answer this questions if u feel like this is not related to medical or inappropriate please tell a generic reponsose to not answer and if not give apt medical repsonse.: "+val)
-            return JsonResponse({"message": response})
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=400)
-    return JsonResponse({"error": "Only POST allowed"}, status=405)
+from rest_framework.permissions import IsAuthenticated
 
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def signup_view(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            username = data.get("username")
-            password = data.get("password")
+    username = request.data.get("username")
+    password = request.data.get("password")
 
-            if not username or not password:
-                return JsonResponse({"error": "Username and password required"}, status=400)
+    if not username or not password:
+        return Response({"error": "Username and password required"}, status=400)
 
-            if User.objects.filter(username=username).exists():
-                return JsonResponse({"error": "User already exists"}, status=400)
+    if User.objects.filter(username=username).exists():
+        return Response({"error": "User already exists"}, status=400)
 
-            User.objects.create_user(username=username, password=password)
-            return JsonResponse({"message": "User created successfully"})
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=400)
-    return JsonResponse({"error": "Only POST allowed"}, status=405)
+    User.objects.create_user(username=username, password=password)
+    return Response({"message": "User created successfully"}, status=201)
 
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
 def login_view(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            username = data.get("username")
-            password = data.get("password")
+    username = request.data.get("username")
+    password = request.data.get("password")
 
-            user = authenticate(request, username=username, password=password)
-            if user is not None:
-                login(request, user)
-                return JsonResponse({"message": "Login successful"})
-            else:
-                return JsonResponse({"error": "Invalid credentials"}, status=401)
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=400)
-    return JsonResponse({"error": "Only POST allowed"}, status=405)
+    user = authenticate(request, username=username, password=password)
+    if user is not None:
+        login(request, user)
+        return Response({"message": "Login successful"})
+    return Response({"error": "Invalid credentials"}, status=401)
 
 
-@csrf_exempt
+@api_view(['POST'])
 def logout_view(request):
-    if request.method == "POST":
-        logout(request)
-        return JsonResponse({"message": "Logged out successfully"})
-    return JsonResponse({"error": "Only POST allowed"}, status=405)
+    logout(request)
+    return Response({"message": "Logged out successfully"})
 
-@csrf_exempt
-@login_required
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def create_post(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            content = data.get("content")
-            if not content:
-                return JsonResponse({"error": "Content is required"}, status=400)
+    serializer = PostSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save(user=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            post = Post.objects.create(user=request.user, content=content)
-            return JsonResponse({"message": "Post created", "post_id": post.id})
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=400)
-    return JsonResponse({"error": "Only POST allowed"}, status=405)
-
-
-@csrf_exempt
-@login_required
+@api_view(['POST'])
 def add_comment(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            post_id = data.get("post_id")
-            comment_text = data.get("comment")
+    serializer = CommentSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save(user=request.user)
+        return Response(serializer.data, status=201)
+    return Response(serializer.errors, status=400)
 
-            if not post_id or not comment_text:
-                return JsonResponse({"error": "post_id and comment required"}, status=400)
 
-            try:
-                post = Post.objects.get(id=post_id)
-            except Post.DoesNotExist:
-                return JsonResponse({"error": "Post not found"}, status=404)
-
-            comment = Comment.objects.create(post=post, user=request.user, comment=comment_text)
-            return JsonResponse({"message": "Comment added", "comment_id": comment.id})
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=400)
-    return JsonResponse({"error": "Only POST allowed"}, status=405)
-
-@csrf_exempt
-@login_required
+@api_view(['POST'])
 def upload_image(request):
-    if request.method == 'POST':
-        form = ImageUploadForm(request.POST, request.FILES)
-        if form.is_valid():
-            image_upload = form.save(commit=False)
-            image_upload.user = request.user
-            image_upload.save()
-            return JsonResponse({
-                "message": "Upload successful"})
-    else:
-        form = ImageUploadForm()
-    return render(request, 'upload_image.html', {'form': form})
+    serializer = ImageUploadSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save(user=request.user)
+        return Response(serializer.data, status=201)
+    return Response(serializer.errors, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def chat(request):
+    val = request.data.get("message", "")
+    response = get_gemini_response(
+        f"You are a chatbot. If unrelated to medicine, respond generically. Else, give a medical response: {val}"
+    )
+    return Response({"message": response})
