@@ -6,6 +6,8 @@ from django.utils.decorators import method_decorator
 from .models import Post, Comment, User
 from django.contrib.auth import authenticate,login,logout
 from .gemini_api import get_gemini_response
+from .forms import ImageUploadForm
+from django.shortcuts import render, redirect
 
 @csrf_exempt
 def chat(request):
@@ -106,3 +108,17 @@ def add_comment(request):
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse({"error": "Only POST allowed"}, status=405)
+
+
+@login_required
+def upload_image(request):
+    if request.method == 'POST':
+        form = ImageUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            image_upload = form.save(commit=False)
+            image_upload.user = request.user
+            image_upload.save()
+            return redirect('upload_success')
+    else:
+        form = ImageUploadForm()
+    return render(request, 'upload_image.html', {'form': form})
