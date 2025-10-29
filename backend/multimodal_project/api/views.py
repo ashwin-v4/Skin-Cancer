@@ -109,7 +109,7 @@ def add_comment(request):
             return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse({"error": "Only POST allowed"}, status=405)
 
-
+@csrf_exempt
 @login_required
 def upload_image(request):
     if request.method == 'POST':
@@ -118,7 +118,8 @@ def upload_image(request):
             image_upload = form.save(commit=False)
             image_upload.user = request.user
             image_upload.save()
-            return redirect('upload_success')
+            return JsonResponse({
+                "message": "Upload successful"})
     else:
         form = ImageUploadForm()
     return render(request, 'upload_image.html', {'form': form})

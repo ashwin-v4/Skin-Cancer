@@ -10,5 +10,5 @@ urlpatterns = [
     path('post/', create_post),
     path('comment/', add_comment),
     path('upload/', upload_image, name='upload_image'),
-    path('api/upload/', upload_image, name='upload_image_api'),
+    path('upload/', upload_image, name='upload_image_api'),
 ]
