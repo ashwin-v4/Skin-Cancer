@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Post, Comment, ImageUpload
+from .models import Post, Comment, ImageUpload, Escalation
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -28,3 +28,12 @@ class ImageUploadSerializer(serializers.ModelSerializer):
     class Meta:
         model = ImageUpload
         fields = ['id', 'user', 'image', 'metadata', 'uploaded_at']
+
+
+class EscalationSerializer(serializers.ModelSerializer):
+    patient_username = serializers.CharField(source='patient.username', read_only=True)
+
+    class Meta:
+        model = Escalation
+        fields = ['id', 'patient', 'patient_username', 'image', 'reason', 'status', 'submitted_at']
+        read_only_fields = ['patient', 'status', 'submitted_at']

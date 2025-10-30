@@ -7,7 +7,8 @@ from .models import Post, Comment, ImageUpload
 from .serializers import PostSerializer, CommentSerializer, ImageUploadSerializer
 from .gemini_api import get_gemini_response
 from rest_framework.permissions import IsAuthenticated
-
+from .models import Escalation
+from .serializers import EscalationSerializer
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -79,3 +80,22 @@ def chat(request):
         f"You are a chatbot. If unrelated to medicine, respond generically. Else, give a medical response: {val}"
     )
     return Response({"message": response})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def escalate_image(request):
+    image_id = request.data.get("image_id")
+    reason = request.data.get("reason", "Possible cancer detected. Needs review.")
+
+    try:
+        image = ImageUpload.objects.get(id=image_id, user=request.user)
+    except ImageUpload.DoesNotExist:
+        return Response({"error": "Image not found or unauthorized."}, status=404)
+
+    escalation = Escalation.objects.create(
+        patient=request.user,
+        image=image,
+        reason=reason
+    )
+    return Response(EscalationSerializer(escalation).data, status=201)

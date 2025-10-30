@@ -9,4 +9,5 @@ urlpatterns = [
     path('post/', views.create_post),
     path('comment/', views.add_comment),
     path('upload/', views.upload_image),
+    path('escalate/', views.escalate_image),
 ]

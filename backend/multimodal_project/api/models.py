@@ -56,3 +56,18 @@ def create_or_update_user_profile(sender, instance, created, **kwargs):
         Profile.objects.create(user=instance)
     else:
         instance.profile.save()
+
+
+class Escalation(models.Model):
+    patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="escalations")
+    image = models.ForeignKey(ImageUpload, on_delete=models.CASCADE, related_name="escalations")
+    reason = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=[
+        ('pending', 'Pending'),
+        ('reviewed', 'Reviewed'),
+        ('closed', 'Closed')
+    ], default='pending')
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Escalation by {self.patient.username} for {self.image.image.name}"
