@@ -24,7 +24,9 @@ def signup_view(request):
 
     User.objects.create_user(username=username, password=password)
     return Response({"message": "User created successfully"}, status=201)
-
+@api_view(['GET'])
+def hello(request):
+    return Response({"message": "Hello, world!"})
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
