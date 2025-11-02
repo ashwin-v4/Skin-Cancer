@@ -31,6 +31,12 @@ ALLOWED_HOSTS = ['*']
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
+
+# If using gunicorn/uwsgi, increase timeout
+CONN_MAX_AGE = 60
+
 # Application definition
 
 INSTALLED_APPS = [

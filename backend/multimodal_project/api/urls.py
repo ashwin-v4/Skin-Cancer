@@ -13,4 +13,5 @@ urlpatterns = [
     path('hello/', views.hello),
     path("posts/", views.list_posts),
     path("posts/<int:post_id>/", views.get_post_details),
+    path("user/",views.user_profile)
 ]

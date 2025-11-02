@@ -4,14 +4,16 @@ from rest_framework import status, permissions
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from .models import Post, Comment, ImageUpload
-from .serializers import PostSerializer, CommentSerializer, ImageUploadSerializer
+from .serializers import PostSerializer, CommentSerializer, ImageUploadSerializer,UserSerializer
 from .gemini_api import get_gemini_response
 from rest_framework.permissions import IsAuthenticated
 from .models import Escalation
 from .serializers import EscalationSerializer
 from django.db.models import Count
 from .serializers import PostSerializer, CommentSerializer
+import logging
 
+logger = logging.getLogger(__name__)
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -69,13 +71,32 @@ def add_comment(request):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def upload_image(request):
-    serializer = ImageUploadSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save(user=request.user)
-        return Response(serializer.data, status=201)
-    return Response(serializer.errors, status=400)
-
+    try:
+        logger.info(f"Upload request from user: {request.user.username}")
+        
+        serializer = ImageUploadSerializer(data=request.data, context={'request': request})
+        
+        if serializer.is_valid():
+            # Save with user
+            instance = serializer.save(user=request.user)
+            logger.info(f"Upload successful: {instance.image.name}")
+            
+            return Response({
+                'message': 'Image uploaded successfully',
+                'data': serializer.data
+            }, status=201)
+        
+        logger.error(f"Validation errors: {serializer.errors}")
+        return Response(serializer.errors, status=400)
+        
+    except Exception as e:
+        logger.error(f"Upload exception: {str(e)}")
+        return Response({
+            'error': 'Upload failed',
+            'detail': str(e)
+        }, status=500)
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -141,6 +162,12 @@ def post_detail(request, pk):
     }
     return Response(data)
 
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_profile(request):
+    serializer = UserSerializer(request.user)
+    return Response(serializer.data)
 
 
 @api_view(['GET'])

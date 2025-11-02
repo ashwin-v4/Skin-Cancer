@@ -4,19 +4,43 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 import os
 
+def user_image_path(instance, filename):
+    # Get file extension
+    ext = filename.split('.')[-1]
+    
+    # Count existing images for this user to get next ID
+    user_image_count = ImageUpload.objects.filter(user=instance.user).count()
+    next_id = user_image_count + 1
+    
+    # Create filename: username_id.extension
+    new_filename = f"{instance.user.username}_{next_id}.{ext}"
+    
+    # Return path: uploads/username/username_id.extension
+    return os.path.join('uploads', instance.user.username, new_filename)
+
+
+
 def image_upload_path(instance, filename):
     folder = 'images'
     os.makedirs(folder, exist_ok=True)
     return os.path.join(folder, filename)
 
 class ImageUpload(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    image = models.ImageField(upload_to=image_upload_path)
-    metadata = models.JSONField(default=dict, blank=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to=user_image_path)  # Custom path function
+    metadata = models.TextField(blank=True, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
+    
+    class Meta:
+        ordering = ['-uploaded_at']  # Latest first
+    
     def __str__(self):
-        return f"{self.user.username} - {self.image.name}"
+        return f"{self.user.username} - Image {self.id} - {self.uploaded_at.strftime('%Y-%m-%d %H:%M')}"
+    
+    @property
+    def image_name(self):
+        """Get just the filename without path"""
+        return os.path.basename(self.image.name)
     
 
 class Post(models.Model):
