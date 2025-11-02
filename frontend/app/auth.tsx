@@ -53,7 +53,7 @@ export default function AuthScreen() {
     try {
       await AsyncStorage.setItem("accessToken", access);
       await AsyncStorage.setItem("refreshToken", refresh);
-      Alert.alert("Success", "Tokens stored successfully!");
+      Alert.alert("Success", "Login successfull!");
     } catch (err) {
       console.error("Error saving tokens", err);
     }
