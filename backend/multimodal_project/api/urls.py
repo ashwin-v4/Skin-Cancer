@@ -10,5 +10,7 @@ urlpatterns = [
     path('comment/', views.add_comment),
     path('upload/', views.upload_image),
     path('escalate/', views.escalate_image),
-    path('hello/', views.hello)
+    path('hello/', views.hello),
+    path("posts/", views.list_posts),
+    path("posts/<int:post_id>/", views.get_post_details),
 ]

@@ -9,6 +9,9 @@ from .gemini_api import get_gemini_response
 from rest_framework.permissions import IsAuthenticated
 from .models import Escalation
 from .serializers import EscalationSerializer
+from django.db.models import Count
+from .serializers import PostSerializer, CommentSerializer
+
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
@@ -101,3 +104,58 @@ def escalate_image(request):
         reason=reason
     )
     return Response(EscalationSerializer(escalation).data, status=201)
+
+@api_view(['GET'])
+def list_posts(request):
+    posts = Post.objects.all().order_by('-created_at')
+    data = []
+
+    for post in posts:
+        data.append({
+            "id": post.id,
+            "user": {"username": post.user.username},
+            "content": post.content,
+            "created_at": post.created_at,
+            "comments_count": post.comments.count(),
+        })
+    return Response(data)
+
+
+@api_view(['GET'])
+def post_detail(request, pk):
+    post = Post.objects.get(pk=pk)
+    comments = post.comments.all().order_by('-created_at')
+    data = {
+        "id": post.id,
+        "user": post.user.username,
+        "content": post.content,
+        "created_at": post.created_at,
+        "comments": [
+            {
+                "id": c.id,
+                "comment": c.comment,
+                "created_at": c.created_at,
+                "user": c.user.username
+            } for c in comments
+        ]
+    }
+    return Response(data)
+
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def get_post_details(request, post_id):
+    try:
+        post = Post.objects.get(id=post_id)
+    except Post.DoesNotExist:
+        return Response({"error": "Post not found"}, status=404)
+
+    post_data = {
+        "id": post.id,
+        "user": post.user.username,
+        "content": post.content,
+        "created_at": post.created_at,
+        "comments": CommentSerializer(post.comments.all().order_by('-created_at'), many=True).data,
+    }
+    return Response(post_data, status=200)

@@ -18,6 +18,7 @@ export default function TabLayout() {
       {/* Hidden route for redirect logic */}
       <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen name="explore" options={{ href: null }} />
+      <Tabs.Screen name="post/[id]" options={{ href: null }} />
 
       {/* Home tab */}
       <Tabs.Screen
