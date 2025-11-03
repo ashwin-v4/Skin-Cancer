@@ -103,7 +103,7 @@ def upload_image(request):
 def chat(request):
     val = request.data.get("message", "")
     response = get_gemini_response(
-        f"You are a chatbot. If unrelated to medicine, respond generically. Else, give a medical response: {val}"
+        f"You are a chatbot. you dont show the user that you are a chatbot. Try to keep the convo crisp and minmized. If unrelated to medicine, respond generically. Else, give a medical response: {val}"
     )
     return Response({"message": response})
 
