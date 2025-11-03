@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -22,26 +22,12 @@ export default function ChatScreen() {
   const [input, setInput] = useState("");
   const scrollViewRef = useRef<KeyboardAwareScrollView>(null);
 
-  useEffect(() => {
-    loadMessages();
-  }, []);
-
-  const loadMessages = async () => {
-    const saved = await AsyncStorage.getItem("chatMessages");
-    if (saved) setMessages(JSON.parse(saved));
-  };
-
-  const saveMessages = async (newMessages: ChatMessage[]) => {
-    setMessages(newMessages);
-    await AsyncStorage.setItem("chatMessages", JSON.stringify(newMessages));
-  };
-
   const sendMessage = async () => {
     if (!input.trim()) return;
 
     const userMsg: ChatMessage = { role: "user", text: input };
     const updated = [...messages, userMsg];
-    saveMessages(updated);
+    setMessages(updated);
     setInput("");
 
     scrollViewRef.current?.scrollToEnd(true);
@@ -62,19 +48,21 @@ export default function ChatScreen() {
         role: "bot",
         text: data.message || "No response",
       };
-      const allMsgs = [...updated, botMsg];
-      saveMessages(allMsgs);
+      setMessages([...updated, botMsg]);
       setTimeout(() => scrollViewRef.current?.scrollToEnd(true), 200);
     } catch (error) {
       const errMsg: ChatMessage = { role: "bot", text: "Error reaching server." };
-      const allMsgs = [...updated, errMsg];
-      saveMessages(allMsgs);
+      setMessages([...updated, errMsg]);
       setTimeout(() => scrollViewRef.current?.scrollToEnd(true), 200);
     }
   };
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerText}>Chat with AI Assistant</Text>
+      </View>
+
       <KeyboardAwareScrollView
         innerRef={(ref) => (scrollViewRef.current = ref)}
         contentContainerStyle={styles.chatArea}
@@ -118,6 +106,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
+  },
+  header: {
+    paddingVertical: 15,
+    backgroundColor: "#111",
+    borderBottomWidth: 1,
+    borderBottomColor: "#222",
+    alignItems: "center",
+  },
+  headerText: {
+    color: "#A7D129",
+    fontSize: 18,
+    fontWeight: "700",
   },
   chatArea: {
     padding: 15,

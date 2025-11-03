@@ -38,14 +38,21 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
-    try {
-      await AsyncStorage.multiRemove(["accessToken", "refreshToken"]);
-      router.replace("/auth");
-    } catch (error) {
-      console.error("Error logging out:", error);
-      Alert.alert("Error", "Could not log out");
+  try {
+    const username = await AsyncStorage.getItem("username");
+    if (username) {
+      await AsyncStorage.removeItem(`chatMessages_${username}`);
+      await AsyncStorage.removeItem("username");
     }
-  };
+
+    await AsyncStorage.multiRemove(["accessToken", "refreshToken"]);
+    router.replace("/auth");
+  } catch (error) {
+    console.error("Error logging out:", error);
+    Alert.alert("Error", "Could not log out");
+  }
+};
+
 
   if (loading) {
     return (
