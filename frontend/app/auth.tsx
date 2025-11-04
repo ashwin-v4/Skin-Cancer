@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_BASE = "http://192.168.29.232:8000/api";
+import {API_BASE} from "../baseApi"
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<"login" | "signup">("login");

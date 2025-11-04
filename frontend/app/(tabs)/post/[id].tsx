@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, Alert, TextInput, TouchableOpacity } 
 import { useLocalSearchParams, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_BASE = "http://192.168.29.232:8000/api";
+import {API_BASE} from "../../../baseApi"
 
 export default function PostDetail() {
   const params = useLocalSearchParams();

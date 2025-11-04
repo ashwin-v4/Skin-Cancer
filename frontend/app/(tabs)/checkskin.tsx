@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Image, TextInput, StyleSheet, Alert, Acti
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_BASE = "http://192.168.29.232:8000/api";
+import {API_BASE} from "../../baseApi"
 
 export default function UploadScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
