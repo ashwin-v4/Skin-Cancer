@@ -107,29 +107,68 @@ def add_comment(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def upload_image(request):
+    import requests
+    import json
+    import os
+    from django.conf import settings
+
     try:
         logger.info(f"Upload request from user: {request.user.username}")
-        
+
         serializer = ImageUploadSerializer(data=request.data, context={'request': request})
-        
-        if serializer.is_valid():
-            instance = serializer.save(user=request.user)
-            logger.info(f"Upload successful: {instance.image.name}")
-            
-            return Response({
-                'message': 'Image uploaded successfully',
-                'data': serializer.data
-            }, status=201)
-        
-        logger.error(f"Validation errors: {serializer.errors}")
-        return Response(serializer.errors, status=400)
-        
+        if not serializer.is_valid():
+            logger.error(f"Validation errors: {serializer.errors}")
+            return Response(serializer.errors, status=400)
+
+        # Save the uploaded image
+        instance = serializer.save(user=request.user)
+        logger.info(f"Upload successful: {instance.image.name}")
+
+        image_path = instance.image.path
+        logger.info(f"Local image path: {image_path}")
+
+        # Get metadata from request body
+        metadata_raw = request.data.get("metadata")
+        try:
+            metadata = json.loads(metadata_raw) if isinstance(metadata_raw, str) else metadata_raw
+        except Exception:
+            logger.warning("Invalid metadata format; using empty dict.")
+            metadata = {}
+
+        # Store metadata in your model instance (if the model has that field)
+        if hasattr(instance, "metadata"):
+            instance.metadata = metadata
+            instance.save(update_fields=["metadata"])
+
+        # Send image + metadata to model API
+        try:
+            with open(image_path, "rb") as f:
+                response = requests.post(
+                    "http://127.0.0.1:8080/predict",
+                    files={"image": f},
+                    data={"metadata": json.dumps(metadata)},
+                    timeout=60
+                )
+            response_data = response.json() if response.status_code == 200 else {"error": response.text}
+        except Exception as e:
+            logger.error(f"Prediction API call failed: {e}")
+            response_data = {"error": f"Prediction API call failed: {str(e)}"}
+
+        return Response({
+            "message": "Image uploaded successfully",
+            "image": serializer.data,
+            "metadata": metadata,
+            "prediction": response_data
+        }, status=201)
+
     except Exception as e:
         logger.error(f"Upload exception: {str(e)}")
         return Response({
-            'error': 'Upload failed',
-            'detail': str(e)
+            "error": "Upload failed",
+            "detail": str(e)
         }, status=500)
+
+
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])

@@ -1,8 +1,34 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, Image, TextInput, StyleSheet, Modal, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Image,
+  TextInput,
+  StyleSheet,
+  Modal,
+  ActivityIndicator,
+  ScrollView,
+} from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE } from "../../baseApi";
+
+type FieldName =
+  | "smoke"
+  | "drink"
+  | "background_father"
+  | "background_mother"
+  | "skin_cancer_history"
+  | "cancer_history"
+  | "itch"
+  | "grew"
+  | "hurt"
+  | "changed"
+  | "bleed"
+  | "elevation";
+
+type AnswerValue = 1 | 0 | -1 | null;
 
 export default function UploadScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -10,13 +36,28 @@ export default function UploadScreen() {
   const [loading, setLoading] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [uploadedImageId, setUploadedImageId] = useState<number | null>(null);
+  const [prediction, setPrediction] = useState<any | null>(null);
+
+  const [metadata, setMetadata] = useState<Record<FieldName, AnswerValue>>({
+    smoke: null,
+    drink: null,
+    background_father: null,
+    background_mother: null,
+    skin_cancer_history: null,
+    cancer_history: null,
+    itch: null,
+    grew: null,
+    hurt: null,
+    changed: null,
+    bleed: null,
+    elevation: null,
+  });
 
   const requestPermission = async (type: "camera" | "gallery") => {
     const permission =
       type === "camera"
         ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
-
     return permission.granted;
   };
 
@@ -44,6 +85,7 @@ export default function UploadScreen() {
   const handleUpload = async () => {
     if (!imageUri) return;
     setLoading(true);
+    setPrediction(null);
     try {
       const token = await AsyncStorage.getItem("accessToken");
       if (!token) return;
@@ -56,10 +98,12 @@ export default function UploadScreen() {
       } as any);
 
       const metadataObject = {
+        ...metadata,
         notes: info || "No notes provided",
         uploadedFrom: "mobile",
         timestamp: new Date().toISOString(),
       };
+
       formData.append("metadata", JSON.stringify(metadataObject));
 
       const res = await fetch(`${API_BASE}/upload/`, {
@@ -69,9 +113,9 @@ export default function UploadScreen() {
       });
 
       const json = await res.json();
-
       if (res.ok) {
-        setUploadedImageId(json.data?.id);
+        setUploadedImageId(json.image?.id || json.data?.id);
+        setPrediction(json.prediction || null);
         setShowPrompt(true);
         setImageUri(null);
         setInfo("");
@@ -83,44 +127,98 @@ export default function UploadScreen() {
     }
   };
 
-  const handleEscalate = async () => {
-    if (!uploadedImageId) return;
-    setLoading(true);
-    try {
-      const token = await AsyncStorage.getItem("accessToken");
-      if (!token) return;
+  const handleSendToDoctor = async () => {
+  if (!uploadedImageId) return;
+  setLoading(true);
+  try {
+    const token = await AsyncStorage.getItem("accessToken");
+    if (!token) return;
 
-      const body = JSON.stringify({
+    const reason = JSON.stringify(metadata);
+
+    const res = await fetch(`${API_BASE}/escalate/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
         image_id: uploadedImageId,
-        reason: info || "No notes provided",
-      });
+        reason,
+      }),
+    });
 
-      const res = await fetch(`${API_BASE}/escalate/`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body,
-      });
-
-      const json = await res.json();
-      console.log("Escalation result:", json);
-    } catch (err) {
-      console.error("Escalation error:", err);
-    } finally {
-      setLoading(false);
+    const json = await res.json();
+    if (res.ok) {
+      console.log("Escalation successful:", json);
       setShowPrompt(false);
-      setUploadedImageId(null);
+      alert("Image sent to doctor for review.");
+    } else {
+      console.error("Escalation failed:", json);
+      alert("Failed to escalate. Try again.");
     }
-  };
+  } catch (err) {
+    console.error("Error escalating image:", err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const renderField = (field: FieldName) => (
+    <View key={field} style={{ marginBottom: 10 }}>
+      <Text style={styles.fieldLabel}>
+        {field.replaceAll("_", " ").toUpperCase()}
+      </Text>
+      <View style={styles.optionRow}>
+        {[
+          { label: "Yes", value: 1 },
+          { label: "No", value: 0 },
+          { label: "Unknown", value: -1 },
+        ].map((option) => (
+          <TouchableOpacity
+            key={option.label}
+            style={[
+              styles.optionButton,
+              metadata[field] === option.value && styles.optionSelected,
+            ]}
+            onPress={() =>
+              setMetadata((prev) => ({ ...prev, [field]: option.value }))
+            }
+          >
+            <Text
+              style={[
+                styles.optionText,
+                metadata[field] === option.value && styles.optionTextSelected,
+              ]}
+            >
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
 
   return (
-    <View style={styles.container}>
+  <View style={{ flex: 1, backgroundColor: "#000" }}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 120 }} // gives space for the bottom button
+    >
       <Text style={styles.title}>Upload Image</Text>
       <Text style={styles.subtitle}>
-        Your data is safe. We do not store your data without your permission
+        Please answer the following questions before uploading.
       </Text>
+
+      {(Object.keys(metadata) as FieldName[]).map((field) => renderField(field))}
+
+      {/* <TextInput
+        style={styles.input}
+        placeholder="Enter notes"
+        placeholderTextColor="#777"
+        value={info}
+        onChangeText={setInfo}
+      /> */}
 
       {imageUri && <Image source={{ uri: imageUri }} style={styles.preview} />}
 
@@ -132,14 +230,7 @@ export default function UploadScreen() {
         <Text style={styles.buttonText}>Take a Photo</Text>
       </TouchableOpacity>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Enter metadata or notes"
-        placeholderTextColor="#777"
-        value={info}
-        onChangeText={setInfo}
-      />
-
+      {/* Upload button placed below the other buttons inside the ScrollView */}
       <TouchableOpacity
         style={styles.uploadButton}
         onPress={handleUpload}
@@ -151,42 +242,69 @@ export default function UploadScreen() {
           <Text style={styles.uploadText}>Upload</Text>
         )}
       </TouchableOpacity>
+    </ScrollView>
 
-      {/* Modal Prompt */}
-      <Modal visible={showPrompt} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Escalate to Doctor?</Text>
-            <Text style={styles.modalText}>
-              Do you want to send this image for medical review?
-            </Text>
+    {/* ✅ Modal */}
+    <Modal visible={showPrompt} transparent animationType="fade">
+  <View style={styles.modalOverlay}>
+    <View style={styles.modalBox}>
+      {prediction ? (
+        <>
+          <Text style={styles.modalTitle}>Result</Text>
+          <Text style={styles.modalResultText}>
+            Prediction: {prediction.prediction || "N/A"}
+          </Text>
+          <Text style={styles.modalResultText}>
+            Confidence: {prediction.confidence_level || "N/A"}
+          </Text>
+          <Text style={styles.modalResultText}>
+            Probability:{" "}
+            {prediction.probability
+              ? `${(prediction.probability * 100).toFixed(2)}%`
+              : "N/A"}
+          </Text>
+        </>
+      ) : (
+        <Text style={styles.modalText}>Processing complete.</Text>
+      )}
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelBtn]}
-                onPress={() => setShowPrompt(false)}
-              >
-                <Text style={styles.modalButtonText}>No</Text>
-              </TouchableOpacity>
+      {/* ✅ Action buttons inside same box */}
+      <View style={styles.modalButtonRow}>
+        <TouchableOpacity
+          style={[styles.modalButton, styles.cancelBtn]}
+          onPress={() => setShowPrompt(false)}
+        >
+          <Text style={styles.modalButtonText}>Cancel</Text>
+        </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.modalButton, styles.confirmBtn]}
-                onPress={handleEscalate}
-              >
-                <Text style={styles.modalButtonText}>Yes</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+       <TouchableOpacity
+          style={[styles.modalButton, styles.confirmBtn]}
+          onPress={handleSendToDoctor}
+        >
+          <Text style={styles.modalButtonText}>Send to Doctor</Text>
+        </TouchableOpacity>
+
+      </View>
     </View>
-  );
-}
+  </View>
+</Modal>
 
+  </View>
+);
+
+}
 const styles = StyleSheet.create({
+  uploadButton: {
+    backgroundColor: "#A7D129",
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 20,
+  },
+
   container: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: "#000",
     padding: 20,
     paddingTop: 60,
   },
@@ -206,7 +324,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 260,
     borderRadius: 10,
-    marginBottom: 20,
+    marginVertical: 20,
   },
   button: {
     backgroundColor: "#3E432E",
@@ -225,20 +343,33 @@ const styles = StyleSheet.create({
     color: "#FFF",
     padding: 12,
     borderRadius: 8,
-    marginTop: 20,
-  },
-  uploadButton: {
-    backgroundColor: "#A7D129",
-    paddingVertical: 15,
-    borderRadius: 10,
-    marginTop: 25,
-    alignItems: "center",
+    marginBottom: 20,
   },
   uploadText: {
     color: "#000",
     fontWeight: "700",
     fontSize: 16,
   },
+  fieldLabel: {
+    color: "#FFF",
+    marginBottom: 5,
+    fontSize: 14,
+  },
+  optionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  optionButton: {
+    flex: 1,
+    backgroundColor: "#2A2A2A",
+    paddingVertical: 8,
+    marginHorizontal: 3,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  optionSelected: { backgroundColor: "#A7D129" },
+  optionText: { color: "#FFF", fontSize: 13 },
+  optionTextSelected: { color: "#000", fontWeight: "700" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",
@@ -247,41 +378,55 @@ const styles = StyleSheet.create({
   },
   modalBox: {
     backgroundColor: "#3E432E",
-    padding: 25,
+    padding: 20,
     borderRadius: 12,
-    width: "80%",
+    width: "90%",
+    alignItems: "center",
   },
   modalTitle: {
     color: "#A7D129",
     fontSize: 20,
     fontWeight: "700",
-    textAlign: "center",
     marginBottom: 10,
+  },
+  modalResultText: {
+    color: "#FFF",
+    fontSize: 14,
+    marginBottom: 5,
   },
   modalText: {
     color: "#FFF",
+    fontSize: 14,
     textAlign: "center",
-    fontSize: 15,
-    marginBottom: 20,
+    marginVertical: 10,
   },
-  modalButtons: {
+  modalButtonRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "space-between",
+    width: "100%",
+    marginTop: 10,
   },
   modalButton: {
     paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: 25,
     borderRadius: 8,
+    marginTop: 10,
   },
   cancelBtn: {
-    backgroundColor: "#616F39",
+    backgroundColor: "#FF5555",
+    flex: 1,
+    marginRight: 8,
   },
   confirmBtn: {
     backgroundColor: "#A7D129",
+    flex: 1,
+    marginLeft: 8,
   },
   modalButtonText: {
     color: "#000",
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: 15,
+    textAlign: "center",
   },
-});
+} as const);
+
