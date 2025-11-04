@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useRouter } from "expo-router";
-
 import {
   View,
   Text,
@@ -14,8 +13,7 @@ import {
   ScrollView,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-import {API_BASE} from "../baseApi"
+import { API_BASE } from "../baseApi";
 
 export default function AuthScreen() {
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -23,9 +21,9 @@ export default function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [familyHistory, setFamilyHistory] = useState("");
+  const [role, setRole] = useState("patient");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-
 
   const clearFields = () => {
     setUsername("");
@@ -48,84 +46,74 @@ export default function AuthScreen() {
     return json;
   };
 
-  // ✅ Save tokens securely
-  const storeTokens = async (access: string, refresh: string) => {
+  const storeTokens = async (access: string, refresh: string, role?: string) => {
     try {
-      await AsyncStorage.setItem("accessToken", access);
-      await AsyncStorage.setItem("refreshToken", refresh);
-      Alert.alert("Success", "Login successfull!");
+      await AsyncStorage.multiSet([
+        ["accessToken", access],
+        ["refreshToken", refresh],
+      ]);
+      if (role) await AsyncStorage.setItem("userRole", role);
+      Alert.alert("Success", "Login successful!");
     } catch (err) {
       console.error("Error saving tokens", err);
     }
   };
 
   const login = async () => {
-  if (!username || !password) {
-    Alert.alert("Fill required", "Please enter username and password");
-    return;
-  }
-  setLoading(true);
-  try {
-    const res = await fetch(`${API_BASE}/token/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    const data = await handleResponseJson(res);
+    if (!username || !password) {
+      Alert.alert("Fill required", "Please enter username and password");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/token/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
 
-    await storeTokens(data.access, data.refresh);
+      const data = await handleResponseJson(res);
+      await storeTokens(data.access, data.refresh, data.role);
 
-
-    clearFields();
-
-    // ✅ Redirect to home page
-    router.replace("/(tabs)/home");
-  } catch (err: any) {
-    Alert.alert("Login failed", err.message || "Unknown error");
-  } finally {
-    setLoading(false);
-  }
-};
-
-
-const signup = async () => {
-  if (!username || !email || !password) {
-    Alert.alert("Fill required", "Please enter username, email and password");
-    return;
-  }
-  setLoading(true);
-  try {
-    const res = await fetch(`${API_BASE}/signup/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username,
-        email,
-        password,
-        family_history_skin_cancer: familyHistory,
-      }),
-    });
-    const data = await handleResponseJson(res);
-
-    // ✅ If signup succeeded, get tokens immediately
-    if (data.access && data.refresh) {
-      await storeTokens(data.access, data.refresh);
       clearFields();
-
-      // ✅ Redirect to home page
       router.replace("/(tabs)/home");
-    } else {
-      Alert.alert("Signed up", "Account created! Please log in now.");
+    } catch (err: any) {
+      Alert.alert("Login failed", err.message || "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signup = async () => {
+    if (!username || !email || !password) {
+      Alert.alert("Fill required", "Please enter all fields");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/signup/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+          role,
+          family_history_skin_cancer: familyHistory,
+        }),
+      });
+
+      const data = await handleResponseJson(res);
+
+      Alert.alert("Account created", "Please log in now.");
       setMode("login");
       clearFields();
+    } catch (err: any) {
+      Alert.alert("Signup failed", err.message || "Unknown error");
+    } finally {
+      setLoading(false);
     }
-  } catch (err: any) {
-    Alert.alert("Signup failed", err.message || "Unknown error");
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   return (
     <KeyboardAvoidingView
@@ -169,14 +157,39 @@ const signup = async () => {
           />
 
           {mode === "signup" && (
-            <TextInput
-              style={styles.input}
-              placeholder="Family history of skin cancer (short)"
-              placeholderTextColor="#AEB39A"
-              value={familyHistory}
-              onChangeText={setFamilyHistory}
-              multiline
-            />
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Family history of skin cancer (short)"
+                placeholderTextColor="#AEB39A"
+                value={familyHistory}
+                onChangeText={setFamilyHistory}
+                multiline
+              />
+
+              {/* Role Selection */}
+              <View style={styles.roleContainer}>
+                {["patient", "doctor"].map((r) => (
+                  <TouchableOpacity
+                    key={r}
+                    style={[
+                      styles.roleButton,
+                      role === r && styles.roleButtonActive,
+                    ]}
+                    onPress={() => setRole(r)}
+                  >
+                    <Text
+                      style={[
+                        styles.roleButtonText,
+                        role === r && styles.roleButtonTextActive,
+                      ]}
+                    >
+                      {r.charAt(0).toUpperCase() + r.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
           )}
 
           <TouchableOpacity
@@ -262,4 +275,27 @@ const styles = StyleSheet.create({
   },
   linkButton: { marginTop: 12, alignItems: "center" },
   linkText: { color: colors.secondary, fontSize: 14 },
+  roleContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginVertical: 10,
+  },
+  roleButton: {
+    borderWidth: 1,
+    borderColor: colors.muted,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  roleButtonActive: {
+    backgroundColor: colors.accent,
+  },
+  roleButtonText: {
+    color: colors.muted,
+    fontWeight: "500",
+  },
+  roleButtonTextActive: {
+    color: "#000",
+    fontWeight: "700",
+  },
 });

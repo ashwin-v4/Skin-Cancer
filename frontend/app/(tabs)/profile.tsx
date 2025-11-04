@@ -9,9 +9,24 @@ export default function ProfileScreen() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-
+  const [role, setRole] = useState<string | null>(null);
+  
   useEffect(() => {
     fetchUser();
+  }, []);
+
+  useEffect(() => {
+    const loadRole = async () => {
+      try {
+        const storedRole = await AsyncStorage.getItem("userRole");
+        setRole(storedRole);
+      } catch (err) {
+        console.error("Error loading role:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadRole();
   }, []);
 
   const fetchUser = async () => {
@@ -22,7 +37,7 @@ export default function ProfileScreen() {
         router.replace("/auth");
         return;
       }
-      const res = await fetch(`${API_BASE}/user/`, {  // Add parentheses and backticks
+      const res = await fetch(`${API_BASE}/user/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -84,7 +99,7 @@ export default function ProfileScreen() {
 
       <View style={styles.infoBox}>
         <Text style={styles.detail}>Username: @{user.username}</Text>
-        <Text style={styles.detail}>Email: {user.email}</Text>
+        <Text style={styles.detail}>Role: {role}</Text>
         {user.role && <Text style={styles.detail}>Role: {user.role}</Text>}
       </View>
 

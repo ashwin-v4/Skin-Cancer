@@ -12,6 +12,9 @@ from .serializers import EscalationSerializer
 from django.db.models import Count
 from .serializers import PostSerializer, CommentSerializer
 import logging
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,7 @@ logger = logging.getLogger(__name__)
 def signup_view(request):
     username = request.data.get("username")
     password = request.data.get("password")
+    role = request.data.get("role", "patient")  # default if not provided
 
     if not username or not password:
         return Response({"error": "Username and password required"}, status=400)
@@ -27,8 +31,27 @@ def signup_view(request):
     if User.objects.filter(username=username).exists():
         return Response({"error": "User already exists"}, status=400)
 
-    User.objects.create_user(username=username, password=password)
-    return Response({"message": "User created successfully"}, status=201)
+    # Create user
+    user = User.objects.create_user(username=username, password=password)
+
+    # Assign role to profile
+    if hasattr(user, "profile"):
+        user.profile.role = role
+        user.profile.save()
+    else:
+        from .models import Profile
+        Profile.objects.create(user=user, role=role)
+
+    return Response(
+        {
+            "message": "User created successfully",
+            "username": user.username,
+            "role": role
+        },
+        status=201
+    )
+
+
 @api_view(['GET'])
 def hello(request):
     return Response({"message": "Hello, world!"})
@@ -38,11 +61,20 @@ def hello(request):
 def login_view(request):
     username = request.data.get("username")
     password = request.data.get("password")
-
+    print("in login")
     user = authenticate(request, username=username, password=password)
     if user is not None:
         login(request, user)
-        return Response({"message": "Login successful"})
+        refresh = RefreshToken.for_user(user)
+        role = user.profile.role
+        print(role)
+        return Response({
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
+            "role": role,
+            "username": user.username,
+            "message": "Login successful"
+        })
     return Response({"error": "Invalid credentials"}, status=401)
 
 
@@ -186,3 +218,21 @@ def get_post_details(request, post_id):
         "comments": CommentSerializer(post.comments.all().order_by('-created_at'), many=True).data,
     }
     return Response(post_data, status=200)
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token['role'] = user.profile.role
+        return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        data['role'] = self.user.profile.role
+        data['username'] = self.user.username
+        return data
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
