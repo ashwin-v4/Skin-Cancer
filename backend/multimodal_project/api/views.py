@@ -3,13 +3,12 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
-from .models import Post, Comment, ImageUpload
-from .serializers import PostSerializer, CommentSerializer, ImageUploadSerializer,UserSerializer
+from .models import Post, ImageUpload
+from .serializers import EscalationDetailSerializer, PostSerializer, CommentSerializer, ImageUploadSerializer,UserSerializer
 from .gemini_api import get_gemini_response
 from rest_framework.permissions import IsAuthenticated
 from .models import Escalation
 from .serializers import EscalationSerializer
-from django.db.models import Count
 from .serializers import PostSerializer, CommentSerializer
 import logging
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -23,33 +22,35 @@ logger = logging.getLogger(__name__)
 def signup_view(request):
     username = request.data.get("username")
     password = request.data.get("password")
-    role = request.data.get("role", "patient")  # default if not provided
+    email = request.data.get("email")
+    phone = request.data.get("phone_number")
+    role = request.data.get("role", "patient")
 
-    if not username or not password:
-        return Response({"error": "Username and password required"}, status=400)
+    if not username or not password or not email:
+        return Response({"error": "Username, email, and password are required"}, status=400)
 
     if User.objects.filter(username=username).exists():
         return Response({"error": "User already exists"}, status=400)
 
-    # Create user
-    user = User.objects.create_user(username=username, password=password)
+    user = User.objects.create_user(username=username, password=password, email=email)
 
-    # Assign role to profile
     if hasattr(user, "profile"):
         user.profile.role = role
+        user.profile.phone_number = phone
+        user.profile.email = email
         user.profile.save()
     else:
         from .models import Profile
-        Profile.objects.create(user=user, role=role)
+        Profile.objects.create(user=user, role=role, phone_number=phone, email=email)
 
-    return Response(
-        {
-            "message": "User created successfully",
-            "username": user.username,
-            "role": role
-        },
-        status=201
-    )
+    return Response({
+        "message": "User created successfully",
+        "username": user.username,
+        "email": user.email,
+        "phone_number": phone,
+        "role": role
+    }, status=201)
+
 
 
 @api_view(['GET'])
@@ -111,7 +112,6 @@ def upload_image(request):
         serializer = ImageUploadSerializer(data=request.data, context={'request': request})
         
         if serializer.is_valid():
-            # Save with user
             instance = serializer.save(user=request.user)
             logger.info(f"Upload successful: {instance.image.name}")
             
@@ -144,19 +144,34 @@ def chat(request):
 @permission_classes([IsAuthenticated])
 def escalate_image(request):
     image_id = request.data.get("image_id")
-    reason = request.data.get("reason", "Possible cancer detected. Needs review.")
+    reason = request.data.get("reason")
 
     try:
         image = ImageUpload.objects.get(id=image_id, user=request.user)
     except ImageUpload.DoesNotExist:
         return Response({"error": "Image not found or unauthorized."}, status=404)
 
+    if not reason:
+        try:
+            metadata = json.loads(image.metadata)
+            reason = metadata.get("notes", "No notes provided")
+        except Exception:
+            reason = "No notes provided"
+
     escalation = Escalation.objects.create(
         patient=request.user,
         image=image,
-        reason=reason
+        reason=reason,
+        status="pending"
     )
-    return Response(EscalationSerializer(escalation).data, status=201)
+
+    return Response({
+        "message": "Escalation created successfully.",
+        "id": escalation.id,
+        "reason": escalation.reason,
+    }, status=201)
+
+
 
 @api_view(['GET'])
 def list_posts(request):
@@ -236,3 +251,28 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_escalations(request):
+    """
+    Get all escalations with patient, image, reason, contact number, and status.
+    """
+    escalations = Escalation.objects.select_related('patient', 'image').order_by('-submitted_at')
+    serializer = EscalationDetailSerializer(escalations, many=True, context={'request': request})
+    return Response(serializer.data, status=200)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_escalation_detail(request, escalation_id):
+    """
+    Get details of a specific escalation.
+    """
+    try:
+        escalation = Escalation.objects.select_related('patient', 'image').get(id=escalation_id)
+    except Escalation.DoesNotExist:
+        return Response({"error": "Escalation not found"}, status=404)
+
+    serializer = EscalationDetailSerializer(escalation, context={'request': request})
+    return Response(serializer.data, status=200)

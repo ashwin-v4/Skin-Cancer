@@ -40,7 +40,7 @@ export default function TabLayout() {
       <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen name="explore" options={{ href: null }} />
       <Tabs.Screen name="post/[id]" options={{ href: null }} />
-
+      <Tabs.Screen name="escalation/[id]" options={{ href: null }} />
       {/* Home tab - always visible */}
       <Tabs.Screen
         name="home"

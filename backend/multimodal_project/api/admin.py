@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Post, Comment, Profile
+from .models import Post, Comment, Profile, Escalation
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from .models import ImageUpload
@@ -25,7 +25,7 @@ class ProfileInline(admin.StackedInline):
 
 class UserAdmin(BaseUserAdmin):
     inlines = (ProfileInline,)
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'get_role')
+    list_display = ('username','email', 'first_name', 'last_name', 'is_staff', 'get_role')
 
     def get_role(self, obj):
         return obj.profile.role
@@ -37,6 +37,13 @@ class ImageUploadAdmin(admin.ModelAdmin):
     list_display = ('user', 'image', 'uploaded_at')
     search_fields = ('user__username',)
 
+
+@admin.register(Escalation)
+class EscalationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'patient', 'image', 'status', 'submitted_at')
+    list_filter = ('status', 'submitted_at')
+    search_fields = ('patient__username', 'reason')
+    readonly_fields = ('submitted_at',)
 
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)

@@ -1,14 +1,15 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, Image, TextInput, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity, Image, TextInput, StyleSheet, Modal, ActivityIndicator } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-import {API_BASE} from "../../baseApi"
+import { API_BASE } from "../../baseApi";
 
 export default function UploadScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [uploadedImageId, setUploadedImageId] = useState<number | null>(null);
 
   const requestPermission = async (type: "camera" | "gallery") => {
     const permission =
@@ -16,56 +17,36 @@ export default function UploadScreen() {
         ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (!permission.granted) {
-      Alert.alert("Permission denied", `Allow ${type} access to continue.`);
-      return false;
-    }
-    return true;
+    return permission.granted;
   };
 
   const pickImage = async () => {
     const granted = await requestPermission("gallery");
     if (!granted) return;
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 0.8,
     });
-
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
-    }
+    if (!result.canceled) setImageUri(result.assets[0].uri);
   };
 
   const takePhoto = async () => {
     const granted = await requestPermission("camera");
     if (!granted) return;
-
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       quality: 0.8,
     });
-
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
-    }
+    if (!result.canceled) setImageUri(result.assets[0].uri);
   };
 
   const handleUpload = async () => {
-    if (!imageUri) {
-      Alert.alert("No Image", "Please select or capture an image first.");
-      return;
-    }
-
+    if (!imageUri) return;
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem("accessToken");
-      if (!token) {
-        Alert.alert("Error", "You need to be logged in.");
-        setLoading(false);
-        return;
-      }
+      if (!token) return;
 
       const formData = new FormData();
       formData.append("image", {
@@ -74,7 +55,6 @@ export default function UploadScreen() {
         type: "image/jpeg",
       } as any);
 
-      // Send metadata as JSON string
       const metadataObject = {
         notes: info || "No notes provided",
         uploadedFrom: "mobile",
@@ -84,36 +64,63 @@ export default function UploadScreen() {
 
       const res = await fetch(`${API_BASE}/upload/`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          // Don't set Content-Type manually — let fetch handle it for FormData
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
 
-      const responseText = await res.text();
+      const json = await res.json();
 
-      if (!res.ok) {
-        console.error("Upload failed:", responseText);
-        Alert.alert("Error", `Upload failed: ${responseText}`);
-      } else {
-        console.log("Success:", responseText);
-        Alert.alert("Success", "Image uploaded successfully!");
+      if (res.ok) {
+        setUploadedImageId(json.data?.id);
+        setShowPrompt(true);
         setImageUri(null);
         setInfo("");
       }
     } catch (err) {
       console.error("Upload error:", err);
-      Alert.alert("Error", "Something went wrong while uploading.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEscalate = async () => {
+    if (!uploadedImageId) return;
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("accessToken");
+      if (!token) return;
+
+      const body = JSON.stringify({
+        image_id: uploadedImageId,
+        reason: info || "No notes provided",
+      });
+
+      const res = await fetch(`${API_BASE}/escalate/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body,
+      });
+
+      const json = await res.json();
+      console.log("Escalation result:", json);
+    } catch (err) {
+      console.error("Escalation error:", err);
+    } finally {
+      setLoading(false);
+      setShowPrompt(false);
+      setUploadedImageId(null);
     }
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Upload Image</Text>
-      <Text style={styles.subtitle}>Your data is safe. We do not store your data without your permission</Text>
+      <Text style={styles.subtitle}>
+        Your data is safe. We do not store your data without your permission
+      </Text>
 
       {imageUri && <Image source={{ uri: imageUri }} style={styles.preview} />}
 
@@ -133,9 +140,45 @@ export default function UploadScreen() {
         onChangeText={setInfo}
       />
 
-      <TouchableOpacity style={styles.uploadButton} onPress={handleUpload} disabled={loading}>
-        {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.uploadText}>Upload</Text>}
+      <TouchableOpacity
+        style={styles.uploadButton}
+        onPress={handleUpload}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="#000" />
+        ) : (
+          <Text style={styles.uploadText}>Upload</Text>
+        )}
       </TouchableOpacity>
+
+      {/* Modal Prompt */}
+      <Modal visible={showPrompt} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Escalate to Doctor?</Text>
+            <Text style={styles.modalText}>
+              Do you want to send this image for medical review?
+            </Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelBtn]}
+                onPress={() => setShowPrompt(false)}
+              >
+                <Text style={styles.modalButtonText}>No</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmBtn]}
+                onPress={handleEscalate}
+              >
+                <Text style={styles.modalButtonText}>Yes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -143,7 +186,7 @@ export default function UploadScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0B0B0B",
+    backgroundColor: "#000000",
     padding: 20,
     paddingTop: 60,
   },
@@ -166,7 +209,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   button: {
-    backgroundColor: "#2E2E2E",
+    backgroundColor: "#3E432E",
     paddingVertical: 12,
     borderRadius: 8,
     marginBottom: 10,
@@ -192,6 +235,51 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   uploadText: {
+    color: "#000",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBox: {
+    backgroundColor: "#3E432E",
+    padding: 25,
+    borderRadius: 12,
+    width: "80%",
+  },
+  modalTitle: {
+    color: "#A7D129",
+    fontSize: 20,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  modalText: {
+    color: "#FFF",
+    textAlign: "center",
+    fontSize: 15,
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  modalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  cancelBtn: {
+    backgroundColor: "#616F39",
+  },
+  confirmBtn: {
+    backgroundColor: "#A7D129",
+  },
+  modalButtonText: {
     color: "#000",
     fontWeight: "700",
     fontSize: 16,

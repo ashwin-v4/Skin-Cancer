@@ -69,9 +69,12 @@ class Profile(models.Model):
     ]
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='patient')
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.user.username} - {self.role}"
+
     
 
 @receiver(post_save, sender=User)
@@ -86,12 +89,18 @@ class Escalation(models.Model):
     patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="escalations")
     image = models.ForeignKey(ImageUpload, on_delete=models.CASCADE, related_name="escalations")
     reason = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=20, choices=[
-        ('pending', 'Pending'),
-        ('reviewed', 'Reviewed'),
-        ('closed', 'Closed')
-    ], default='pending')
+    contact_number = models.CharField(max_length=15, blank=True, null=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('unsure', 'Unsure'),
+            ('cancer positive', 'Cancer Positive'),
+            ('cancer negative', 'Cancer Negative'),
+        ],
+        default='unsure'
+    )
     submitted_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Escalation by {self.patient.username} for {self.image.image.name}"
+

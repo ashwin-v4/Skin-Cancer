@@ -13,5 +13,7 @@ urlpatterns = [
     path('hello/', views.hello),
     path("posts/", views.list_posts),
     path("posts/<int:post_id>/", views.get_post_details),
-    path("user/",views.user_profile)
+    path("user/",views.user_profile),
+    path('escalations/', views.list_escalations, name='list_escalations'),
+    path('escalations/<int:escalation_id>/', views.get_escalation_detail, name='get_escalation_detail'),
 ]

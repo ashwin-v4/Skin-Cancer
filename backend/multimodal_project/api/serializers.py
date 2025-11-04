@@ -69,8 +69,27 @@ class EscalationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Escalation
-        fields = ['id', 'patient', 'patient_username', 'image', 'reason', 'status', 'submitted_at']
+        fields = ['id', 'patient', 'patient_username', 'image', 'reason', 'contact_number', 'status', 'submitted_at']
         read_only_fields = ['patient', 'status', 'submitted_at']
+
+
+class EscalationDetailSerializer(serializers.ModelSerializer):
+    patient = UserSerializer(read_only=True)
+    image = ImageUploadSerializer(read_only=True)
+
+    class Meta:
+        model = Escalation
+        fields = [
+            'id',
+            'patient',
+            'image',
+            'reason',
+            'contact_number',
+            'status',
+            'submitted_at'
+        ]
+
+
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:

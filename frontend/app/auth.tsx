@@ -19,6 +19,7 @@ export default function AuthScreen() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [familyHistory, setFamilyHistory] = useState("");
   const [role, setRole] = useState("patient");
@@ -28,6 +29,7 @@ export default function AuthScreen() {
   const clearFields = () => {
     setUsername("");
     setEmail("");
+    setPhone("");
     setPassword("");
     setFamilyHistory("");
   };
@@ -61,7 +63,7 @@ export default function AuthScreen() {
 
   const login = async () => {
     if (!username || !password) {
-      Alert.alert("Fill required", "Please enter username and password");
+      Alert.alert("Missing fields", "Enter username and password");
       return;
     }
     setLoading(true);
@@ -71,22 +73,19 @@ export default function AuthScreen() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
-
       const data = await handleResponseJson(res);
       await storeTokens(data.access, data.refresh, data.role);
-
-      clearFields();
       router.replace("/(tabs)/home");
     } catch (err: any) {
-      Alert.alert("Login failed", err.message || "Unknown error");
+      Alert.alert("Login failed", err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const signup = async () => {
-    if (!username || !email || !password) {
-      Alert.alert("Fill required", "Please enter all fields");
+    if (!username || !email || !phone || !password) {
+      Alert.alert("Missing fields", "Please fill all required fields");
       return;
     }
     setLoading(true);
@@ -97,19 +96,18 @@ export default function AuthScreen() {
         body: JSON.stringify({
           username,
           email,
+          phone,
           password,
           role,
           family_history_skin_cancer: familyHistory,
         }),
       });
-
-      const data = await handleResponseJson(res);
-
+      await handleResponseJson(res);
       Alert.alert("Account created", "Please log in now.");
       setMode("login");
       clearFields();
     } catch (err: any) {
-      Alert.alert("Signup failed", err.message || "Unknown error");
+      Alert.alert("Signup failed", err.message);
     } finally {
       setLoading(false);
     }
@@ -136,15 +134,25 @@ export default function AuthScreen() {
           />
 
           {mode === "signup" && (
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#AEB39A"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor="#AEB39A"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Phone Number"
+                placeholderTextColor="#AEB39A"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+              />
+            </>
           )}
 
           <TextInput
@@ -167,7 +175,6 @@ export default function AuthScreen() {
                 multiline
               />
 
-              {/* Role Selection */}
               <View style={styles.roleContainer}>
                 {["patient", "doctor"].map((r) => (
                   <TouchableOpacity
@@ -198,7 +205,7 @@ export default function AuthScreen() {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator size="small" />
+              <ActivityIndicator size="small" color="#000" />
             ) : (
               <Text style={styles.primaryButtonText}>
                 {mode === "login" ? "Log in" : "Create account"}
