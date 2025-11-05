@@ -109,7 +109,6 @@ def add_comment(request):
 def upload_image(request):
     import requests
     import json
-    import os
     from django.conf import settings
 
     try:
@@ -120,14 +119,14 @@ def upload_image(request):
             logger.error(f"Validation errors: {serializer.errors}")
             return Response(serializer.errors, status=400)
 
-        # Save the uploaded image
+        # Save uploaded image
         instance = serializer.save(user=request.user)
         logger.info(f"Upload successful: {instance.image.name}")
 
         image_path = instance.image.path
         logger.info(f"Local image path: {image_path}")
 
-        # Get metadata from request body
+        # Parse metadata
         metadata_raw = request.data.get("metadata")
         try:
             metadata = json.loads(metadata_raw) if isinstance(metadata_raw, str) else metadata_raw
@@ -135,7 +134,7 @@ def upload_image(request):
             logger.warning("Invalid metadata format; using empty dict.")
             metadata = {}
 
-        # Store metadata in your model instance (if the model has that field)
+        # Store metadata if applicable
         if hasattr(instance, "metadata"):
             instance.metadata = metadata
             instance.save(update_fields=["metadata"])
@@ -154,12 +153,31 @@ def upload_image(request):
             logger.error(f"Prediction API call failed: {e}")
             response_data = {"error": f"Prediction API call failed: {str(e)}"}
 
+        # Try to get simplified explanation via Gemini
+        try:
+            prompt = (
+                f"Explain this in very simple terms for a layperson in just one line and dont address as computer or system just start with 'The Results indicate that': {response_data}"
+            )
+            xai_response = get_gemini_response(prompt)
+        except Exception as e:
+            logger.error(f"Gemini explanation failed: {e}")
+            xai_response = ""
+
         return Response({
             "message": "Image uploaded successfully",
             "image": serializer.data,
             "metadata": metadata,
-            "prediction": response_data
+            "prediction": response_data,
+            "xai": xai_response or ""
         }, status=201)
+
+    except Exception as e:
+        logger.error(f"Upload exception: {str(e)}")
+        return Response({
+            "error": "Upload failed",
+            "detail": str(e)
+        }, status=500)
+
 
     except Exception as e:
         logger.error(f"Upload exception: {str(e)}")

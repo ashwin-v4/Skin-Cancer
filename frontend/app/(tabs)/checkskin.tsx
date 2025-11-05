@@ -38,7 +38,7 @@ export default function UploadScreen() {
   const [uploadedImageId, setUploadedImageId] = useState<number | null>(null);
   const [prediction, setPrediction] = useState<any | null>(null);
 
-  const [metadata, setMetadata] = useState<Record<FieldName, AnswerValue>>({
+  const [metadata, setMetadata] = useState<Record<FieldName, AnswerValue> & { age: string | null }>({
     smoke: null,
     drink: null,
     background_father: null,
@@ -51,6 +51,7 @@ export default function UploadScreen() {
     changed: null,
     bleed: null,
     elevation: null,
+    age: null,
   });
 
   const requestPermission = async (type: "camera" | "gallery") => {
@@ -115,11 +116,15 @@ export default function UploadScreen() {
       const json = await res.json();
       if (res.ok) {
         setUploadedImageId(json.image?.id || json.data?.id);
-        setPrediction(json.prediction || null);
+        setPrediction({
+          ...json.prediction,
+          xai: json.xai || "", // ✅ include explanation from backend
+        });
         setShowPrompt(true);
         setImageUri(null);
         setInfo("");
       }
+
     } catch (err) {
       console.error("Upload error:", err);
     } finally {
@@ -209,8 +214,24 @@ export default function UploadScreen() {
       <Text style={styles.subtitle}>
         Please answer the following questions before uploading.
       </Text>
+      <View style={{ marginBottom: 20 }}>
+        <Text style={styles.fieldLabel}>AGE</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter your age"
+          placeholderTextColor="#777"
+          keyboardType="numeric"
+          value={metadata.age ? String(metadata.age) : ""}
+          onChangeText={(text) =>
+            setMetadata((prev) => ({ ...prev, age: text }))
+          }
+        />
+      </View>
+     {(Object.keys(metadata) as FieldName[])
+      .filter((field) => field !== ("age" as FieldName))
+      .map((field) => renderField(field))}
 
-      {(Object.keys(metadata) as FieldName[]).map((field) => renderField(field))}
+
 
       {/* <TextInput
         style={styles.input}
@@ -263,12 +284,20 @@ export default function UploadScreen() {
               ? `${(prediction.probability * 100).toFixed(2)}%`
               : "N/A"}
           </Text>
+
+          {/* ✅ XAI explanation (newly added) */}
+          {prediction.xai && (
+            <View style={styles.xaiBox}>
+              <Text style={styles.xaiTitle}>Explanation</Text>
+              <Text style={styles.xaiText}>{prediction.xai}</Text>
+            </View>
+          )}
         </>
       ) : (
         <Text style={styles.modalText}>Processing complete.</Text>
       )}
 
-      {/* ✅ Action buttons inside same box */}
+      {/* ✅ Action buttons */}
       <View style={styles.modalButtonRow}>
         <TouchableOpacity
           style={[styles.modalButton, styles.cancelBtn]}
@@ -277,23 +306,46 @@ export default function UploadScreen() {
           <Text style={styles.modalButtonText}>Cancel</Text>
         </TouchableOpacity>
 
-       <TouchableOpacity
+        <TouchableOpacity
           style={[styles.modalButton, styles.confirmBtn]}
           onPress={handleSendToDoctor}
         >
           <Text style={styles.modalButtonText}>Send to Doctor</Text>
         </TouchableOpacity>
-
       </View>
     </View>
   </View>
 </Modal>
+
 
   </View>
 );
 
 }
 const styles = StyleSheet.create({
+  xaiBox: {
+  backgroundColor: "#2A2A2A",
+  padding: 10,
+  borderRadius: 8,
+  marginTop: 10,
+  marginBottom: 10,
+  width: "100%",
+},
+xaiTitle: {
+  color: "#A7D129",
+  fontSize: 16,
+  fontWeight: "700",
+  marginBottom: 6,
+  textAlign: "left",
+  width: "100%",
+},
+xaiText: {
+  color: "#FFF",
+  fontSize: 13,
+  lineHeight: 18,
+  textAlign: "left",
+},
+
   uploadButton: {
     backgroundColor: "#A7D129",
     paddingVertical: 15,
